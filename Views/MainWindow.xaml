@@ -1,0 +1,258 @@
+<Window x:Class="GhostChaser.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewmodels="clr-namespace:GhostChaser.ViewModels"
+        xmlns:models="clr-namespace:GhostChaser.Models"
+        Title="GhostChaser - Cyber Deception Toolkit"
+        Height="700" Width="1100"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Window.DataContext>
+        <viewmodels:MainViewModel/>
+    </Window.DataContext>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{StaticResource PrimaryBrush}" CornerRadius="5" Padding="15" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock Text="👻 GhostChaser" FontSize="28" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="Deploy canary accounts, files, and shares across your Windows environment"
+                           FontSize="14" Foreground="#BDC3C7" Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="3*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel - Ghost Configuration -->
+            <Border Grid.Column="0" Background="White" CornerRadius="5" Padding="10" Margin="0,0,5,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Ghost Configuration" FontSize="18" FontWeight="Bold"
+                                   Foreground="{StaticResource GhostBrush}" Margin="5,5,5,15"/>
+
+                        <!-- Ghost Type Selection -->
+                        <GroupBox Header="Ghost Type">
+                            <StackPanel>
+                                <RadioButton Content="👤 Account (User)"
+                                             IsChecked="{Binding SelectedGhostType, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={x:Static models:GhostType.Account}}"
+                                             GroupName="GhostType">
+                                    <RadioButton.Tag>
+                                        <models:GhostType>Account</models:GhostType>
+                                    </RadioButton.Tag>
+                                </RadioButton>
+                                <RadioButton Content="📄 File (Document)"
+                                             IsChecked="{Binding SelectedGhostType, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={x:Static models:GhostType.File}}"
+                                             GroupName="GhostType">
+                                    <RadioButton.Tag>
+                                        <models:GhostType>File</models:GhostType>
+                                    </RadioButton.Tag>
+                                </RadioButton>
+                                <RadioButton Content="🗂️ Share (Network)"
+                                             IsChecked="{Binding SelectedGhostType, Converter={StaticResource EnumToBoolConverter}, ConverterParameter={x:Static models:GhostType.Share}}"
+                                             GroupName="GhostType">
+                                    <RadioButton.Tag>
+                                        <models:GhostType>Share</models:GhostType>
+                                    </RadioButton.Tag>
+                                </RadioButton>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Common Fields -->
+                        <GroupBox Header="Basic Information">
+                            <StackPanel>
+                                <Label Content="Ghost Name:"/>
+                                <TextBox Text="{Binding GhostName, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Label Content="Target System:"/>
+                                <TextBox Text="{Binding TargetSystem, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Credentials -->
+                        <GroupBox Header="Deployment Credentials">
+                            <StackPanel>
+                                <CheckBox Content="Use Current User Credentials"
+                                          IsChecked="{Binding UseCurrentCredentials}"/>
+
+                                <Label Content="Username:" IsEnabled="{Binding CredentialsEnabled}"/>
+                                <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding CredentialsEnabled}"/>
+
+                                <Label Content="Password:" IsEnabled="{Binding CredentialsEnabled}"/>
+                                <PasswordBox x:Name="PasswordBox" IsEnabled="{Binding CredentialsEnabled}"/>
+
+                                <Label Content="Domain:" IsEnabled="{Binding CredentialsEnabled}"/>
+                                <TextBox Text="{Binding Domain, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding CredentialsEnabled}"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Ghost Account Specific -->
+                        <GroupBox Header="Account Details" Visibility="{Binding IsAccountSelected, Converter={StaticResource BoolToVisConverter}}">
+                            <StackPanel>
+                                <Label Content="Username:"/>
+                                <TextBox Text="{Binding AccountUsername, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="5">
+                                    <RadioButton Content="Local Account" IsChecked="{Binding IsLocalAccount}"
+                                                 GroupName="AccountType" Margin="0,0,15,0"/>
+                                    <RadioButton Content="Domain Account" IsChecked="{Binding IsLocalAccount, Converter={StaticResource InverseBoolConverter}}"
+                                                 GroupName="AccountType"/>
+                                </StackPanel>
+
+                                <Label Content="Domain:" Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
+                                <TextBox Text="{Binding AccountDomain, UpdateSourceTrigger=PropertyChanged}"
+                                         Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
+
+                                <Label Content="Organizational Unit (Optional):"
+                                       Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
+                                <TextBox Text="{Binding OrganizationalUnit, UpdateSourceTrigger=PropertyChanged}"
+                                         Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Ghost File Specific -->
+                        <GroupBox Header="File Details" Visibility="{Binding IsFileSelected, Converter={StaticResource BoolToVisConverter}}">
+                            <StackPanel>
+                                <Label Content="File Path (Optional):"/>
+                                <TextBox Text="{Binding FilePath, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Label Content="File Extension:"/>
+                                <ComboBox ItemsSource="{Binding FileExtensions}"
+                                          SelectedItem="{Binding FileExtension}"/>
+
+                                <CheckBox Content="Enable File Auditing"
+                                          IsChecked="{Binding EnableFileAuditing}"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Ghost Share Specific -->
+                        <GroupBox Header="Share Details" Visibility="{Binding IsShareSelected, Converter={StaticResource BoolToVisConverter}}">
+                            <StackPanel>
+                                <Label Content="Share Name:"/>
+                                <TextBox Text="{Binding ShareName, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Label Content="Share Path (Optional):"/>
+                                <TextBox Text="{Binding SharePath, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Label Content="Description:"/>
+                                <TextBox Text="{Binding ShareDescription, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <CheckBox Content="Enable Share Auditing"
+                                          IsChecked="{Binding EnableShareAuditing}"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Deploy Button -->
+                        <Button Content="👻 Deploy Ghost"
+                                Command="{Binding DeployGhostCommand}"
+                                Background="{StaticResource GhostBrush}"
+                                FontSize="16"
+                                Padding="20,10"
+                                Margin="5,15,5,5"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Right Panel - Deployed Ghosts -->
+            <Border Grid.Column="1" Background="White" CornerRadius="5" Padding="10" Margin="5,0,0,0">
+                <DockPanel>
+                    <TextBlock Text="Deployed Ghosts" FontSize="18" FontWeight="Bold"
+                               Foreground="{StaticResource GhostBrush}" Margin="5,5,5,15"
+                               DockPanel.Dock="Top"/>
+
+                    <ListView ItemsSource="{Binding DeployedGhosts}"
+                              SelectionMode="Single">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Type" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Type}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+
+                                <GridViewColumn Header="Name" Width="150">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+
+                                <GridViewColumn Header="Target System" Width="120">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding TargetSystem}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+
+                                <GridViewColumn Header="Status" Width="80">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Status}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+
+                                <GridViewColumn Header="Created" Width="140">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding CreatedDate, StringFormat='yyyy-MM-dd HH:mm'}"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+
+                                <GridViewColumn Header="Actions" Width="100">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Remove"
+                                                    Command="{Binding DataContext.RemoveGhostCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    Background="{StaticResource ErrorBrush}"
+                                                    Padding="8,4"
+                                                    Margin="0"/>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2" Background="{StaticResource SecondaryBrush}" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+            <DockPanel>
+                <Button Content="Clear"
+                        Command="{Binding ClearStatusCommand}"
+                        Background="{StaticResource SecondaryBrush}"
+                        BorderBrush="White"
+                        BorderThickness="1"
+                        Padding="10,4"
+                        Margin="0,0,10,0"
+                        DockPanel.Dock="Right"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{Binding IsStatusError, Converter={StaticResource StatusColorConverter}}"
+                           FontSize="13"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
