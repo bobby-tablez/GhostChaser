@@ -1,6 +1,6 @@
 # 👻 GhostChaser - Cyber Deception Toolkit
 
-**GhostChaser** is a Windows-based cyber deception tool designed to deploy and manage canary accounts, files, and network shares (collectively called "Ghosts") across enterprise Windows environments. These Ghosts act as tripwires to detect unauthorized access, lateral movement, and malicious activity within your network.
+**GhostChaser** is a Windows-based cyber deception tool designed to deploy and manage canary accounts, files, network shares, and Service Principal Names (collectively called "Ghosts") across enterprise Windows environments. These Ghosts act as tripwires to detect unauthorized access, lateral movement, Kerberoasting attacks, and malicious activity within your network.
 
 ## Overview
 
@@ -8,10 +8,11 @@ GhostChaser enables security teams to implement proactive defense-in-depth strat
 
 ### Key Features
 
-- **Three Ghost Types:**
+- **Four Ghost Types:**
   - **👤 Account Ghosts**: Canary user accounts (local or domain)
   - **📄 File Ghosts**: Decoy documents with enticing names and content
   - **🗂️ Share Ghosts**: Honeypot network shares with bait files
+  - **🎫 SPN Ghosts**: Honey Service Principal Names for Kerberoasting detection
 
 - **Graphical User Interface**: Intuitive WPF-based GUI for easy Ghost management
 - **Remote Deployment**: Target local or remote Windows systems on your network
@@ -223,6 +224,77 @@ Ghost shares are honeypot network shares designed to detect lateral movement and
 - The tool automatically populates shares with bait files
 - Enable auditing to track access attempts
 
+### Creating Ghost SPNs (Kerberoasting Detection)
+
+Ghost SPNs are honey Service Principal Names designed to detect Kerberoasting attacks - a technique where attackers request TGS tickets for SPNs to crack offline using tools like **Rubeus**, **Kerbrute**, **Impacket GetUserSPNs**, and similar offensive security tools.
+
+**How Kerberoasting Works:**
+1. Attacker enumerates SPNs in Active Directory
+2. Attacker requests TGS tickets for discovered SPNs
+3. TGS tickets are encrypted with the service account's password hash
+4. Attacker attempts offline brute-force/dictionary attacks
+5. If successful, attacker gains the service account password
+
+**Why Honey SPNs Work:**
+- Attackers enumerate **all** SPNs - they cannot distinguish honey SPNs from real ones
+- Any TGS request for a honey SPN indicates attack activity
+- Detection happens **before** the attacker succeeds in cracking passwords
+- High-fidelity alerts with very low false positive rates
+
+**Steps:**
+1. Select **SPN (Kerberos)** as the Ghost type
+2. Enter a **Ghost Name** (descriptive identifier)
+3. Specify the **Target System** (domain controller or domain name)
+4. Configure **Deployment Credentials** (requires Domain Admin)
+5. Select a **Service Class** from the dropdown or enter a custom one:
+   - `MSSQLSvc` - SQL Server (highly targeted by attackers)
+   - `HTTP` / `HTTPS` - Web services
+   - `LDAP` - LDAP services
+   - `CIFS` - Windows file shares
+   - `TERMSRV` - Terminal Services/RDP
+   - `exchangeMDB` - Exchange Mailbox
+   - And 15+ more common service classes
+6. Enter the **Service Host** (e.g., `sqlserver.domain.com:1433`)
+7. Enter a **Service Account** name (e.g., `svc_sql_backup`)
+8. Specify the **Domain**
+9. Enable **Create Service Account** if the account doesn't exist
+10. Enable **Kerberos Auditing** for Event ID 4769 monitoring
+11. Click **Deploy Ghost**
+
+**Command-Line Alternative:**
+```cmd
+# Create the service account
+net user svc_sql_honey P@ssw0rd123! /add /domain
+
+# Register the SPN using setspn
+setspn -s MSSQLSvc/sqlserver.corp.local:1433 CORP\svc_sql_honey
+
+# Verify the SPN
+setspn -L svc_sql_honey
+```
+
+**Best Practices:**
+- Use enticing service classes that attackers target (MSSQLSvc, HTTP, LDAP)
+- Create realistic-looking service hostnames
+- Deploy multiple SPNs across different service types
+- Monitor Event ID 4769 (Kerberos Service Ticket Operations) in your SIEM
+- Use strong passwords for honey accounts (they should never crack)
+- Document all honey SPNs to avoid confusion during incident response
+
+**Detection Events:**
+| Event ID | Description | Indicates |
+|----------|-------------|-----------|
+| 4769 | Kerberos Service Ticket (TGS) requested | Kerberoasting attempt |
+| 4770 | Kerberos Service Ticket renewed | Follow-up activity |
+
+**Example SIEM Alert (Splunk):**
+```spl
+index=windows sourcetype=WinEventLog:Security EventCode=4769
+ServiceName IN ("MSSQLSvc/sqlhoney*", "HTTP/webhoney*")
+| stats count by ServiceName, TargetUserName, IpAddress
+| where count > 0
+```
+
 ## Remote System Deployment
 
 GhostChaser supports deploying Ghosts to remote Windows systems on the same network.
@@ -272,6 +344,18 @@ C:\ProgramData\GhostChaser\Logs\GhostChaser_Audit_YYYYMMDD.log
 When auditing is enabled, Ghost access attempts generate events in:
 - **Security Log**: Event IDs 4663, 4656 (File/Share access)
 - **Security Log**: Event IDs 4624, 4625 (Account logon attempts)
+- **Security Log**: Event ID 4769 (Kerberos TGS requests - SPN Ghosts)
+- **Security Log**: Event ID 5140 (Network share access)
+
+### Critical Event IDs by Ghost Type
+
+| Ghost Type | Event IDs | Severity | Description |
+|------------|-----------|----------|-------------|
+| Account | 4624 | **CRITICAL** | Successful logon (investigate immediately) |
+| Account | 4625 | HIGH | Failed logon attempt |
+| File | 4663, 4656 | HIGH | File access detected |
+| Share | 5140 | HIGH | Network share accessed |
+| SPN | 4769 | **CRITICAL** | Kerberoasting detected |
 
 ### SIEM Integration
 
@@ -279,6 +363,25 @@ Forward Windows Security logs to your SIEM and create alerts for:
 - Logon attempts using Ghost account usernames
 - File access events for Ghost file paths
 - Network share access to Ghost shares
+- **TGS requests (Event 4769) for Ghost SPNs** - indicates Kerberoasting
+
+**Example Combined Alert Query (Splunk):**
+```spl
+index=windows sourcetype=WinEventLog:Security
+(
+  (EventCode=4624 OR EventCode=4625) TargetUserName="svc_*_honey"
+  OR (EventCode=4663) ObjectName="*passwords*"
+  OR (EventCode=5140) ShareName="*Backup*"
+  OR (EventCode=4769) ServiceName="*honey*"
+)
+| eval AlertType=case(
+    EventCode IN (4624, 4625), "Ghost Account Access",
+    EventCode=4663, "Ghost File Access",
+    EventCode=5140, "Ghost Share Access",
+    EventCode=4769, "Kerberoasting Detected"
+)
+| stats count by AlertType, src_ip, user
+```
 
 ### Manual Verification
 
@@ -360,6 +463,19 @@ Use the GhostChaser GUI to track deployed Ghosts and verify their status.
 - Confirm Security Event Log is not full
 - Review Windows audit policy with `auditpol /get /category:*`
 
+### Ghost SPN Creation Fails
+- Verify you have Domain Admin privileges
+- Check that the service account name doesn't already exist
+- Ensure the SPN isn't already registered to another account (`setspn -Q <SPN>`)
+- Verify network connectivity to domain controllers
+- If using LDAP method fails, the tool will fallback to `setspn.exe` automatically
+- Review audit logs for specific error details
+
+### SPN Already Exists Error
+- Check which account has the SPN: `setspn -Q MSSQLSvc/hostname`
+- Remove from existing account if needed: `setspn -d MSSQLSvc/hostname DOMAIN\account`
+- Use a different service host name for your honey SPN
+
 ## Architecture
 
 GhostChaser uses a clean architecture with separation of concerns:
@@ -367,7 +483,15 @@ GhostChaser uses a clean architecture with separation of concerns:
 ```
 GhostChaser/
 ├── Models/              # Domain models (Ghost types, credentials, status)
+│   ├── Ghost.cs         # Base Ghost class and GhostAccount, GhostFile, GhostShare, GhostSPN
+│   ├── GhostType.cs     # Enum: Account, File, Share, SPN
+│   └── ...
 ├── Services/            # Business logic (deployment services, logging)
+│   ├── GhostAccountService.cs   # Local/Domain account creation
+│   ├── GhostFileService.cs      # Bait file creation with templates
+│   ├── GhostShareService.cs     # Network share creation via WMI
+│   ├── GhostSPNService.cs       # SPN registration (LDAP + setspn.exe)
+│   └── AuditLogger.cs           # JSON audit logging
 ├── ViewModels/          # MVVM view models
 ├── Views/               # WPF UI views
 └── Converters/          # UI data converters
@@ -376,7 +500,8 @@ GhostChaser/
 **Key Technologies:**
 - **WPF**: Modern Windows UI framework
 - **C# / .NET 8.0**: Core programming language and framework
-- **System.DirectoryServices**: Active Directory integration
+- **System.DirectoryServices**: Active Directory integration (SPNs, accounts)
+- **System.DirectoryServices.AccountManagement**: User/Group management
 - **System.Management**: WMI for remote management
 - **MVVM Pattern**: Clean separation of UI and business logic
 
@@ -412,6 +537,16 @@ For issues, questions, or feature requests:
 - Consult Windows Event Logs for system-level errors
 
 ## Version History
+
+**v1.1.0** - Kerberoasting Detection
+- **NEW: Ghost SPN (Service Principal Name) creation** for detecting Kerberoasting attacks
+- Support for 20+ common service classes (MSSQLSvc, HTTP, LDAP, CIFS, etc.)
+- Dual deployment methods: LDAP/DirectoryEntry (primary) and setspn.exe (fallback)
+- Automatic service account creation option
+- Event ID 4769 monitoring integration
+- Detection of Rubeus, Kerbrute, Impacket, and similar offensive tools
+- Updated UI with SPN configuration panel
+- Enhanced audit logging for SPN deployments
 
 **v1.0.0** - Initial Release
 - Ghost account creation (local and domain)
