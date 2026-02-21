@@ -128,6 +128,29 @@
                                        Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
                                 <TextBox Text="{Binding OrganizationalUnit, UpdateSourceTrigger=PropertyChanged}"
                                          Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"/>
+
+                                <Label Content="Description (shows in AD/Local Users):"/>
+                                <TextBox Text="{Binding AccountDescription, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Custom description for the account. Leave blank for a realistic default."/>
+
+                                <Label Content="Group Memberships (makes account enticing):" Margin="0,10,0,0"/>
+                                <StackPanel Margin="10,5,0,0">
+                                    <CheckBox Content="Administrators" IsChecked="{Binding AddToAdministrators}"
+                                              ToolTip="Add to local Administrators group"/>
+                                    <CheckBox Content="Remote Desktop Users" IsChecked="{Binding AddToRemoteDesktopUsers}"
+                                              ToolTip="Add to Remote Desktop Users group"/>
+                                    <CheckBox Content="Backup Operators" IsChecked="{Binding AddToBackupOperators}"
+                                              ToolTip="Add to Backup Operators group"/>
+                                    <CheckBox Content="Domain Admins" IsChecked="{Binding AddToDomainAdmins}"
+                                              Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"
+                                              ToolTip="Add to Domain Admins group (domain accounts only)"/>
+                                    <CheckBox Content="Enterprise Admins" IsChecked="{Binding AddToEnterpriseAdmins}"
+                                              Visibility="{Binding IsDomainAccount, Converter={StaticResource BoolToVisConverter}}"
+                                              ToolTip="Add to Enterprise Admins group (domain accounts only)"/>
+                                </StackPanel>
+                                <TextBlock Text="Note: Group membership makes accounts appear high-value to attackers"
+                                           FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"
+                                           Margin="5,5,5,0"/>
                             </StackPanel>
                         </GroupBox>
 
@@ -140,6 +163,10 @@
                                 <Label Content="File Extension:"/>
                                 <ComboBox ItemsSource="{Binding FileExtensions}"
                                           SelectedItem="{Binding FileExtension}"/>
+
+                                <Label Content="File Description (metadata):"/>
+                                <TextBox Text="{Binding FileDescription, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Description embedded in file metadata. Leave blank for a realistic default."/>
 
                                 <CheckBox Content="Enable File Auditing"
                                           IsChecked="{Binding EnableFileAuditing}"/>
@@ -155,11 +182,37 @@
                                 <Label Content="Share Path (Optional):"/>
                                 <TextBox Text="{Binding SharePath, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                <Label Content="Description:"/>
-                                <TextBox Text="{Binding ShareDescription, UpdateSourceTrigger=PropertyChanged}"/>
+                                <Label Content="Share Description (visible in network):"/>
+                                <TextBox Text="{Binding ShareDescription, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Description shown when browsing network shares. Leave blank for a realistic default."/>
+
+                                <Label Content="Bait Files (select files to include):" Margin="0,10,0,0"/>
+                                <StackPanel Margin="10,5,0,0">
+                                    <CheckBox Content="passwords.txt" IsChecked="{Binding BaitPasswordsTxt}"
+                                              ToolTip="Text file appearing to contain passwords"/>
+                                    <CheckBox Content="credentials.xlsx" IsChecked="{Binding BaitCredentialsXlsx}"
+                                              ToolTip="Excel spreadsheet appearing to contain credentials"/>
+                                    <CheckBox Content="database_backup.sql" IsChecked="{Binding BaitDatabaseBackupSql}"
+                                              ToolTip="SQL backup file"/>
+                                    <CheckBox Content="vpn.config" IsChecked="{Binding BaitVpnConfig}"
+                                              ToolTip="VPN configuration file"/>
+                                    <CheckBox Content="id_rsa" IsChecked="{Binding BaitIdRsa}"
+                                              ToolTip="SSH private key file"/>
+                                    <CheckBox Content="config.json" IsChecked="{Binding BaitConfigJson}"
+                                              ToolTip="JSON configuration with apparent secrets"/>
+                                    <CheckBox Content="deployment.bat" IsChecked="{Binding BaitDeploymentBat}"
+                                              ToolTip="Batch script with embedded credentials"/>
+                                    <CheckBox Content="admin_access.ps1" IsChecked="{Binding BaitAdminAccessPs1}"
+                                              ToolTip="PowerShell admin script"/>
+                                    <CheckBox Content="hr_ssn.docx" IsChecked="{Binding BaitHrSsnDocx}"
+                                              ToolTip="HR document with SSN data"/>
+                                    <CheckBox Content="CFO_Budget.pdf" IsChecked="{Binding BaitCfoBudgetPdf}"
+                                              ToolTip="Executive financial document"/>
+                                </StackPanel>
 
                                 <CheckBox Content="Enable Share Auditing"
-                                          IsChecked="{Binding EnableShareAuditing}"/>
+                                          IsChecked="{Binding EnableShareAuditing}"
+                                          Margin="0,10,0,0"/>
                             </StackPanel>
                         </GroupBox>
 
@@ -179,6 +232,10 @@
 
                                 <Label Content="Domain:"/>
                                 <TextBox Text="{Binding AccountDomain, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Label Content="Account Description (visible in AD):"/>
+                                <TextBox Text="{Binding SPNDescription, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Description for the service account in AD. Leave blank for a realistic default."/>
 
                                 <CheckBox Content="Create Service Account (if not exists)"
                                           IsChecked="{Binding SPNCreateServiceAccount}"

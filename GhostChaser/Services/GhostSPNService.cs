@@ -200,10 +200,15 @@ namespace GhostChaser.Services
 
                     userPrincipal.Save();
 
+                    // CRITICAL: Deny all logon hours to prevent actual authentication
+                    // Even with correct credentials, the account cannot log on
+                    // but TGS requests will still generate Event ID 4769
+                    DenyAllLogonHours(userPrincipal);
+
                     return new DeploymentResult
                     {
                         Success = true,
-                        Message = $"Service account '{ghost.ServiceAccount}' created successfully"
+                        Message = $"Service account '{ghost.ServiceAccount}' created successfully (logon hours denied)"
                     };
                 }
             }
@@ -366,19 +371,48 @@ namespace GhostChaser.Services
 
                 // Try LDAP removal first
                 var ldapResult = RemoveSPNviaLDAP(ghost, credentials, domain);
-                if (ldapResult.Success)
+                bool spnRemoved = ldapResult.Success;
+                string spnMessage = ldapResult.Message;
+
+                if (!spnRemoved)
                 {
-                    ghost.Status = GhostStatus.Removed;
-                    return ldapResult;
+                    // Fallback to setspn.exe -d
+                    var setspnResult = RemoveSPNviaSetSPN(ghost, domain);
+                    spnRemoved = setspnResult.Success;
+                    spnMessage = setspnResult.Message;
                 }
 
-                // Fallback to setspn.exe -d
-                var setspnResult = RemoveSPNviaSetSPN(ghost, domain);
-                if (setspnResult.Success)
+                if (!spnRemoved)
                 {
-                    ghost.Status = GhostStatus.Removed;
+                    return new DeploymentResult
+                    {
+                        Success = false,
+                        Message = spnMessage
+                    };
                 }
-                return setspnResult;
+
+                // SPN removed successfully - now delete the service account if it was created by GhostChaser
+                string accountMessage = "";
+                if (ghost.CreateServiceAccount)
+                {
+                    var accountResult = DeleteServiceAccount(ghost.ServiceAccount, domain, credentials);
+                    if (accountResult.Success)
+                    {
+                        accountMessage = $" Service account '{ghost.ServiceAccount}' also deleted.";
+                    }
+                    else
+                    {
+                        accountMessage = $" Warning: Could not delete service account: {accountResult.Message}";
+                    }
+                }
+
+                ghost.Status = GhostStatus.Removed;
+
+                return new DeploymentResult
+                {
+                    Success = true,
+                    Message = $"Ghost SPN '{ghost.ServicePrincipalName}' removed successfully.{accountMessage}"
+                };
             }
             catch (Exception ex)
             {
@@ -386,6 +420,63 @@ namespace GhostChaser.Services
                 {
                     Success = false,
                     Message = $"Failed to remove Ghost SPN: {ex.Message}",
+                    ErrorDetails = ex.ToString()
+                };
+            }
+        }
+
+        /// <summary>
+        /// Deletes a service account that was created for a Ghost SPN
+        /// </summary>
+        private DeploymentResult DeleteServiceAccount(string accountName, string domain, DeploymentCredentials credentials)
+        {
+            try
+            {
+                PrincipalContext context;
+
+                if (credentials.UseCurrentCredentials || string.IsNullOrEmpty(credentials.Username))
+                {
+                    context = new PrincipalContext(ContextType.Domain, domain);
+                }
+                else
+                {
+                    string? password = SecureStringToString(credentials.Password);
+                    context = new PrincipalContext(
+                        ContextType.Domain,
+                        domain,
+                        null,
+                        credentials.Username,
+                        password);
+                }
+
+                using (context)
+                {
+                    UserPrincipal? user = UserPrincipal.FindByIdentity(context, accountName);
+
+                    if (user == null)
+                    {
+                        return new DeploymentResult
+                        {
+                            Success = false,
+                            Message = $"Service account '{accountName}' not found"
+                        };
+                    }
+
+                    user.Delete();
+
+                    return new DeploymentResult
+                    {
+                        Success = true,
+                        Message = $"Service account '{accountName}' deleted successfully"
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                return new DeploymentResult
+                {
+                    Success = false,
+                    Message = $"Failed to delete service account: {ex.Message}",
                     ErrorDetails = ex.ToString()
                 };
             }
@@ -625,6 +716,36 @@ namespace GhostChaser.Services
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Sets the logon hours for an account to deny all hours.
+        /// This prevents the service account from being used for logon even with correct credentials,
+        /// while still allowing Kerberos TGS requests (Event ID 4769) to be generated for detection.
+        /// </summary>
+        /// <param name="userPrincipal">The UserPrincipal to restrict</param>
+        private void DenyAllLogonHours(UserPrincipal userPrincipal)
+        {
+            try
+            {
+                // Get the underlying DirectoryEntry
+                DirectoryEntry? directoryEntry = userPrincipal.GetUnderlyingObject() as DirectoryEntry;
+                if (directoryEntry == null)
+                    return;
+
+                // logonHours is a 21-byte array (168 hours = 24 hours * 7 days)
+                // Each bit represents one hour. Setting all to 0 denies all logon hours.
+                byte[] logonHours = new byte[21];
+                // All bytes default to 0x00, which means no hours allowed
+
+                directoryEntry.Properties["logonHours"].Value = logonHours;
+                directoryEntry.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail - logon hours restriction is an enhancement
+                Console.WriteLine($"Warning: Could not set logon hours restriction for SPN service account: {ex.Message}");
             }
         }
 

@@ -32,11 +32,20 @@ namespace GhostChaser.ViewModels
         private string _accountDomain = string.Empty;
         private bool _isLocalAccount = true;
         private string _organizationalUnit = string.Empty;
+        private string _accountDescription = string.Empty;
+
+        // Group membership options (makes Ghost accounts more enticing to attackers)
+        private bool _addToAdministrators;
+        private bool _addToRemoteDesktopUsers;
+        private bool _addToBackupOperators;
+        private bool _addToDomainAdmins;
+        private bool _addToEnterpriseAdmins;
 
         // Ghost File specific
         private string _filePath = string.Empty;
         private string _fileExtension = ".txt";
         private bool _enableFileAuditing = true;
+        private string _fileDescription = string.Empty;
 
         // Ghost Share specific
         private string _shareName = string.Empty;
@@ -44,12 +53,25 @@ namespace GhostChaser.ViewModels
         private string _shareDescription = string.Empty;
         private bool _enableShareAuditing = true;
 
+        // Bait file options for Ghost Shares
+        private bool _baitPasswordsTxt = true;
+        private bool _baitCredentialsXlsx = true;
+        private bool _baitDatabaseBackupSql;
+        private bool _baitVpnConfig;
+        private bool _baitIdRsa;
+        private bool _baitConfigJson;
+        private bool _baitDeploymentBat;
+        private bool _baitAdminAccessPs1;
+        private bool _baitHrSsnDocx;
+        private bool _baitCfoBudgetPdf;
+
         // Ghost SPN specific
         private string _spnServiceClass = "MSSQLSvc";
         private string _spnServiceHost = string.Empty;
         private string _spnServiceAccount = string.Empty;
         private bool _spnCreateServiceAccount = true;
         private bool _enableKerberosAuditing = true;
+        private string _spnDescription = string.Empty;
 
         public ObservableCollection<Ghost> DeployedGhosts { get; }
         public ObservableCollection<string> SPNServiceClasses { get; }
@@ -194,6 +216,43 @@ namespace GhostChaser.ViewModels
             set => SetProperty(ref _organizationalUnit, value);
         }
 
+        public string AccountDescription
+        {
+            get => _accountDescription;
+            set => SetProperty(ref _accountDescription, value);
+        }
+
+        // Group Membership Properties (makes Ghost accounts appear privileged)
+        public bool AddToAdministrators
+        {
+            get => _addToAdministrators;
+            set => SetProperty(ref _addToAdministrators, value);
+        }
+
+        public bool AddToRemoteDesktopUsers
+        {
+            get => _addToRemoteDesktopUsers;
+            set => SetProperty(ref _addToRemoteDesktopUsers, value);
+        }
+
+        public bool AddToBackupOperators
+        {
+            get => _addToBackupOperators;
+            set => SetProperty(ref _addToBackupOperators, value);
+        }
+
+        public bool AddToDomainAdmins
+        {
+            get => _addToDomainAdmins;
+            set => SetProperty(ref _addToDomainAdmins, value);
+        }
+
+        public bool AddToEnterpriseAdmins
+        {
+            get => _addToEnterpriseAdmins;
+            set => SetProperty(ref _addToEnterpriseAdmins, value);
+        }
+
         // Ghost File Properties
         public string FilePath
         {
@@ -211,6 +270,12 @@ namespace GhostChaser.ViewModels
         {
             get => _enableFileAuditing;
             set => SetProperty(ref _enableFileAuditing, value);
+        }
+
+        public string FileDescription
+        {
+            get => _fileDescription;
+            set => SetProperty(ref _fileDescription, value);
         }
 
         // Ghost Share Properties
@@ -236,6 +301,67 @@ namespace GhostChaser.ViewModels
         {
             get => _enableShareAuditing;
             set => SetProperty(ref _enableShareAuditing, value);
+        }
+
+        // Bait File Properties (for Ghost Shares)
+        public bool BaitPasswordsTxt
+        {
+            get => _baitPasswordsTxt;
+            set => SetProperty(ref _baitPasswordsTxt, value);
+        }
+
+        public bool BaitCredentialsXlsx
+        {
+            get => _baitCredentialsXlsx;
+            set => SetProperty(ref _baitCredentialsXlsx, value);
+        }
+
+        public bool BaitDatabaseBackupSql
+        {
+            get => _baitDatabaseBackupSql;
+            set => SetProperty(ref _baitDatabaseBackupSql, value);
+        }
+
+        public bool BaitVpnConfig
+        {
+            get => _baitVpnConfig;
+            set => SetProperty(ref _baitVpnConfig, value);
+        }
+
+        public bool BaitIdRsa
+        {
+            get => _baitIdRsa;
+            set => SetProperty(ref _baitIdRsa, value);
+        }
+
+        public bool BaitConfigJson
+        {
+            get => _baitConfigJson;
+            set => SetProperty(ref _baitConfigJson, value);
+        }
+
+        public bool BaitDeploymentBat
+        {
+            get => _baitDeploymentBat;
+            set => SetProperty(ref _baitDeploymentBat, value);
+        }
+
+        public bool BaitAdminAccessPs1
+        {
+            get => _baitAdminAccessPs1;
+            set => SetProperty(ref _baitAdminAccessPs1, value);
+        }
+
+        public bool BaitHrSsnDocx
+        {
+            get => _baitHrSsnDocx;
+            set => SetProperty(ref _baitHrSsnDocx, value);
+        }
+
+        public bool BaitCfoBudgetPdf
+        {
+            get => _baitCfoBudgetPdf;
+            set => SetProperty(ref _baitCfoBudgetPdf, value);
         }
 
         // Ghost SPN Properties
@@ -267,6 +393,12 @@ namespace GhostChaser.ViewModels
         {
             get => _enableKerberosAuditing;
             set => SetProperty(ref _enableKerberosAuditing, value);
+        }
+
+        public string SPNDescription
+        {
+            get => _spnDescription;
+            set => SetProperty(ref _spnDescription, value);
         }
 
         #endregion
@@ -434,6 +566,26 @@ namespace GhostChaser.ViewModels
                 return null;
             }
 
+            // Collect selected group memberships
+            var groups = new System.Collections.Generic.List<string>();
+
+            // Groups available for both local and domain accounts
+            if (AddToAdministrators)
+                groups.Add("Administrators");
+            if (AddToRemoteDesktopUsers)
+                groups.Add("Remote Desktop Users");
+            if (AddToBackupOperators)
+                groups.Add("Backup Operators");
+
+            // Domain-only groups
+            if (!IsLocalAccount)
+            {
+                if (AddToDomainAdmins)
+                    groups.Add("Domain Admins");
+                if (AddToEnterpriseAdmins)
+                    groups.Add("Enterprise Admins");
+            }
+
             return new GhostAccount
             {
                 Name = GhostName,
@@ -441,7 +593,9 @@ namespace GhostChaser.ViewModels
                 Domain = AccountDomain,
                 IsLocalAccount = IsLocalAccount,
                 OrganizationalUnit = string.IsNullOrWhiteSpace(OrganizationalUnit) ? null : OrganizationalUnit,
-                Description = $"Ghost canary account - {GhostName}"
+                Description = string.IsNullOrWhiteSpace(AccountDescription) ?
+                    "Service account for scheduled backup tasks" : AccountDescription,
+                GroupMemberships = groups
             };
         }
 
@@ -453,7 +607,8 @@ namespace GhostChaser.ViewModels
                 FilePath = FilePath,
                 FileExtension = FileExtension,
                 HasAuditingEnabled = EnableFileAuditing,
-                Description = $"Ghost canary file - {GhostName}"
+                Description = string.IsNullOrWhiteSpace(FileDescription) ?
+                    "Archived project documentation" : FileDescription
             };
         }
 
@@ -465,15 +620,31 @@ namespace GhostChaser.ViewModels
                 return null;
             }
 
+            // Collect selected bait files
+            var baitFiles = new System.Collections.Generic.List<string>();
+            if (BaitPasswordsTxt) baitFiles.Add("passwords.txt");
+            if (BaitCredentialsXlsx) baitFiles.Add("credentials.xlsx");
+            if (BaitDatabaseBackupSql) baitFiles.Add("database_backup.sql");
+            if (BaitVpnConfig) baitFiles.Add("vpn.config");
+            if (BaitIdRsa) baitFiles.Add("id_rsa");
+            if (BaitConfigJson) baitFiles.Add("config.json");
+            if (BaitDeploymentBat) baitFiles.Add("deployment.bat");
+            if (BaitAdminAccessPs1) baitFiles.Add("admin_access.ps1");
+            if (BaitHrSsnDocx) baitFiles.Add("hr_ssn.docx");
+            if (BaitCfoBudgetPdf) baitFiles.Add("CFO_Budget.pdf");
+
+            string shareDesc = string.IsNullOrWhiteSpace(ShareDescription) ?
+                "Shared folder for departmental resources" : ShareDescription;
+
             return new GhostShare
             {
                 Name = GhostName,
                 ShareName = ShareName,
                 SharePath = SharePath,
-                ShareDescription = string.IsNullOrWhiteSpace(ShareDescription) ?
-                    $"Ghost canary share - {GhostName}" : ShareDescription,
+                ShareDescription = shareDesc,
                 HasAuditingEnabled = EnableShareAuditing,
-                Description = $"Ghost canary share - {GhostName}"
+                Description = shareDesc,
+                BaitFiles = baitFiles
             };
         }
 
@@ -509,7 +680,8 @@ namespace GhostChaser.ViewModels
                 Domain = AccountDomain,
                 CreateServiceAccount = SPNCreateServiceAccount,
                 HasKerberosAuditingEnabled = EnableKerberosAuditing,
-                Description = $"Ghost honey SPN for Kerberoasting detection - {GhostName}"
+                Description = string.IsNullOrWhiteSpace(SPNDescription) ?
+                    "Service account for legacy application integration" : SPNDescription
             };
         }
 
@@ -541,12 +713,32 @@ namespace GhostChaser.ViewModels
         {
             GhostName = string.Empty;
             AccountUsername = string.Empty;
+            AccountDescription = string.Empty;
+            // Reset group membership checkboxes
+            AddToAdministrators = false;
+            AddToRemoteDesktopUsers = false;
+            AddToBackupOperators = false;
+            AddToDomainAdmins = false;
+            AddToEnterpriseAdmins = false;
             FilePath = string.Empty;
+            FileDescription = string.Empty;
             ShareName = string.Empty;
             SharePath = string.Empty;
             ShareDescription = string.Empty;
+            // Reset bait file checkboxes to defaults
+            BaitPasswordsTxt = true;
+            BaitCredentialsXlsx = true;
+            BaitDatabaseBackupSql = false;
+            BaitVpnConfig = false;
+            BaitIdRsa = false;
+            BaitConfigJson = false;
+            BaitDeploymentBat = false;
+            BaitAdminAccessPs1 = false;
+            BaitHrSsnDocx = false;
+            BaitCfoBudgetPdf = false;
             SPNServiceHost = string.Empty;
             SPNServiceAccount = string.Empty;
+            SPNDescription = string.Empty;
         }
     }
 }

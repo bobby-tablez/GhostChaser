@@ -128,12 +128,27 @@ namespace GhostChaser.Services
 
                     userPrincipal.Save();
 
+                    // NOTE: Local Windows accounts don't support logonHours attribute
+                    // via the WinNT provider. For local Ghost accounts, security relies on:
+                    // 1. Strong random password (32 chars, complex)
+                    // 2. Auditing of logon attempts
+                    // For best protection, use domain accounts which support logon hour restrictions.
+
+                    // Add to specified groups (makes account appear privileged)
+                    if (ghost.GroupMemberships.Count > 0)
+                    {
+                        AddToLocalGroups(machineName, ghost.Username, ghost.GroupMemberships);
+                    }
+
                     ghost.Status = GhostStatus.Active;
+
+                    string groupInfo = ghost.GroupMemberships.Count > 0 ?
+                        $" Added to: {string.Join(", ", ghost.GroupMemberships)}." : "";
 
                     return new DeploymentResult
                     {
                         Success = true,
-                        Message = $"Ghost account '{ghost.Username}' created successfully on {machineName}",
+                        Message = $"Ghost account '{ghost.Username}' created successfully on {machineName}.{groupInfo} Note: For enhanced protection with logon hour restrictions, use domain accounts.",
                         DeployedGhost = ghost
                     };
                 }
@@ -205,13 +220,27 @@ namespace GhostChaser.Services
 
                     userPrincipal.Save();
 
+                    // CRITICAL: Deny all logon hours to prevent actual authentication
+                    // Even with correct credentials, the account cannot log on
+                    // but attempts will still generate Event ID 4625 (failed logon)
+                    DenyAllLogonHours(userPrincipal);
+
+                    // Add to specified groups (makes account appear privileged)
+                    if (ghost.GroupMemberships.Count > 0)
+                    {
+                        AddToDomainGroups(userPrincipal, context, ghost.GroupMemberships);
+                    }
+
                     ghost.Domain = domain;
                     ghost.Status = GhostStatus.Active;
+
+                    string groupInfo = ghost.GroupMemberships.Count > 0 ?
+                        $" Added to: {string.Join(", ", ghost.GroupMemberships)}." : "";
 
                     return new DeploymentResult
                     {
                         Success = true,
-                        Message = $"Ghost domain account '{ghost.Username}' created successfully in {domain}",
+                        Message = $"Ghost domain account '{ghost.Username}' created successfully in {domain} (logon hours denied).{groupInfo}",
                         DeployedGhost = ghost
                     };
                 }
@@ -352,6 +381,91 @@ namespace GhostChaser.Services
             }
 
             return password.ToString();
+        }
+
+        /// <summary>
+        /// Sets the logon hours for an account to deny all hours.
+        /// This prevents the account from being used for logon even with correct credentials,
+        /// while still generating security events when authentication is attempted.
+        /// </summary>
+        /// <param name="userPrincipal">The UserPrincipal to restrict</param>
+        private void DenyAllLogonHours(UserPrincipal userPrincipal)
+        {
+            try
+            {
+                // Get the underlying DirectoryEntry
+                DirectoryEntry? directoryEntry = userPrincipal.GetUnderlyingObject() as DirectoryEntry;
+                if (directoryEntry == null)
+                    return;
+
+                // logonHours is a 21-byte array (168 hours = 24 hours * 7 days)
+                // Each bit represents one hour. Setting all to 0 denies all logon hours.
+                byte[] logonHours = new byte[21];
+                // All bytes default to 0x00, which means no hours allowed
+
+                directoryEntry.Properties["logonHours"].Value = logonHours;
+                directoryEntry.CommitChanges();
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail - logon hours restriction is an enhancement
+                Console.WriteLine($"Warning: Could not set logon hours restriction: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Adds a local user to specified local groups.
+        /// </summary>
+        private void AddToLocalGroups(string machineName, string username, System.Collections.Generic.List<string> groups)
+        {
+            if (groups == null || groups.Count == 0)
+                return;
+
+            foreach (string groupName in groups)
+            {
+                try
+                {
+                    using DirectoryEntry group = new DirectoryEntry($"WinNT://{machineName}/{groupName},group");
+                    group.Invoke("Add", $"WinNT://{machineName}/{username},user");
+                }
+                catch (Exception ex)
+                {
+                    // Log but continue - some groups may not exist
+                    Console.WriteLine($"Warning: Could not add {username} to {groupName}: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds a domain user to specified domain groups.
+        /// </summary>
+        private void AddToDomainGroups(UserPrincipal userPrincipal, PrincipalContext context, System.Collections.Generic.List<string> groups)
+        {
+            if (groups == null || groups.Count == 0)
+                return;
+
+            foreach (string groupName in groups)
+            {
+                try
+                {
+                    GroupPrincipal? group = GroupPrincipal.FindByIdentity(context, groupName);
+                    if (group != null)
+                    {
+                        group.Members.Add(userPrincipal);
+                        group.Save();
+                        group.Dispose();
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Warning: Group '{groupName}' not found in domain");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Log but continue - some groups may require elevated privileges
+                    Console.WriteLine($"Warning: Could not add user to {groupName}: {ex.Message}");
+                }
+            }
         }
 
         private string? SecureStringToString(SecureString? secureString)

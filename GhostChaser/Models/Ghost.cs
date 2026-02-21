@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace GhostChaser.Models
 {
@@ -34,6 +35,12 @@ namespace GhostChaser.Models
         public bool IsLocalAccount { get; set; }
         public string? OrganizationalUnit { get; set; }
 
+        /// <summary>
+        /// Group memberships to add the Ghost account to.
+        /// Makes the account appear more enticing to attackers.
+        /// </summary>
+        public List<string> GroupMemberships { get; set; } = new List<string>();
+
         public GhostAccount()
         {
             Type = GhostType.Account;
@@ -65,6 +72,12 @@ namespace GhostChaser.Models
         public string SharePath { get; set; } = string.Empty;
         public string? ShareDescription { get; set; }
         public bool HasAuditingEnabled { get; set; }
+
+        /// <summary>
+        /// List of bait files to create in the share.
+        /// Selected by user to make the share appear enticing.
+        /// </summary>
+        public List<string> BaitFiles { get; set; } = new List<string>();
 
         public GhostShare()
         {
