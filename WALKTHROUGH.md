@@ -100,6 +100,16 @@ Ghost Accounts are fake user accounts that trigger alerts on any authentication 
 | **Account Type** | Local or Domain account | Domain for enterprise |
 | **Domain** | Target domain (domain accounts only) | `CORP.LOCAL` |
 | **Organizational Unit** | OU path for account creation | `OU=ServiceAccounts,DC=corp,DC=local` |
+| **Description** | Custom account description (optional) | Leave blank for realistic default |
+| **Group Memberships** | Privileged groups to add account to | Administrators, Domain Admins |
+
+### Security Features
+
+| Feature | Description |
+|---------|-------------|
+| **Denied Logon Hours** | Domain accounts are created with zero allowed logon hours - authentication fails even with correct credentials |
+| **Strong Passwords** | 32-character cryptographically random passwords |
+| **Privileged Appearance** | Group memberships make accounts attractive to attackers |
 
 ### Deployment Steps
 
@@ -110,7 +120,11 @@ Ghost Accounts are fake user accounts that trigger alerts on any authentication 
    - Enter a realistic **Username** (see naming conventions below)
    - Choose **Local Account** or **Domain Account**
    - For domain accounts, specify the **Domain** and optional **OU**
-5. Click **Deploy Ghost**
+   - Optionally enter a custom **Description**
+5. Select **Group Memberships** to make the account appear privileged:
+   - Administrators, Remote Desktop Users, Backup Operators (all accounts)
+   - Domain Admins, Enterprise Admins (domain accounts only)
+6. Click **Deploy Ghost**
 
 ### Recommended Naming Conventions
 
@@ -134,10 +148,12 @@ Application Accounts:
 
 | Event ID | Description | Log |
 |----------|-------------|-----|
-| **4624** | Successful logon (shouldn't happen - investigate immediately) | Security |
-| **4625** | Failed logon attempt (credential testing detected) | Security |
+| **4624** | Successful logon (shouldn't happen for domain accounts with denied logon hours) | Security |
+| **4625** | Failed logon attempt - **primary detection event** | Security |
 | **4768** | Kerberos TGT request | Security |
 | **4776** | NTLM authentication attempt | Security |
+
+> **Note:** Domain Ghost Accounts have zero allowed logon hours. Any authentication attempt will fail with Event ID 4625, even with correct credentials. This ensures detection while preventing actual account compromise.
 
 ### Example SIEM Query (Splunk)
 
@@ -255,7 +271,8 @@ Ghost Shares are decoy network shares that detect reconnaissance and lateral mov
 |-------|-------------|---------|
 | **Share Name** | Name of the network share | `Backups`, `Finance`, `HR_Documents` |
 | **Share Path** | Local folder path for the share | `C:\GhostShares\Finance` |
-| **Description** | Share description visible in enumeration | `Financial Reports - Restricted` |
+| **Description** | Share description visible in enumeration | Leave blank for realistic default |
+| **Bait Files** | Checkbox selection of enticing files | `passwords.txt`, `id_rsa`, etc. |
 | **Enable Auditing** | Configure share access auditing | Recommended: Yes |
 
 ### Deployment Steps
@@ -266,20 +283,39 @@ Ghost Shares are decoy network shares that detect reconnaissance and lateral mov
 4. Configure Share Details:
    - Enter the **Share Name**
    - Enter the **Share Path** (local folder to share)
-   - Enter a realistic **Description**
+   - Enter a realistic **Description** (or leave blank for default)
+   - Select **Bait Files** to include (see options below)
    - Enable **Share Auditing**
 5. Click **Deploy Ghost**
 
-### Auto-Generated Bait Files
+### Bait File Options
 
-Ghost Shares are automatically populated with bait files:
+Select which files to include in your Ghost Share:
+
+| File | Description |
+|------|-------------|
+| `passwords.txt` | Fake credentials document with redacted passwords |
+| `credentials.xlsx` | Excel spreadsheet appearing to contain credentials |
+| `database_backup.sql` | SQL backup script with fake connection strings |
+| `vpn.config` | VPN configuration file with fake settings |
+| `id_rsa` | SSH private key file (fake) |
+| `config.json` | JSON config with database/API credentials |
+| `deployment.bat` | Batch script with embedded credential references |
+| `admin_access.ps1` | PowerShell admin script |
+| `hr_ssn.docx` | HR document appearing to contain PII |
+| `CFO_Budget.pdf` | Executive financial document |
+
+All bait files are:
+- Backdated 2-12 months to appear legitimate
+- Contain realistic but fake content
+- Sensitive values are marked `[REDACTED]`
 
 ```
 \\SERVER\Finance\
-├── passwords.txt
-├── credentials.xlsx
-├── database_backup.sql
-└── vpn_config.txt
+├── passwords.txt        (selected)
+├── credentials.xlsx     (selected)
+├── database_backup.sql  (selected)
+└── config.json          (selected)
 ```
 
 ### Recommended Share Names
@@ -348,7 +384,17 @@ Ghost SPNs are honey Service Principal Names that detect Kerberoasting attacks -
 | **Service Host** | Target hostname (can include port) | `sqlserver.corp.local:1433` |
 | **Service Account** | Account to register SPN | `svc_sql_honey` |
 | **Domain** | Target domain | `CORP.LOCAL` |
+| **Account Description** | Custom description for the service account | Leave blank for realistic default |
 | **Create Service Account** | Create new account if needed | Recommended: Yes |
+| **Enable Kerberos Auditing** | Enable Event ID 4769 monitoring | Recommended: Yes |
+
+### Security Features
+
+| Feature | Description |
+|---------|-------------|
+| **Denied Logon Hours** | Service accounts are created with zero allowed logon hours |
+| **Strong Passwords** | 32-character cryptographically random passwords that won't crack offline |
+| **Complete Removal** | Removing a Ghost SPN also deletes the service account (if created by GhostChaser) |
 
 ### Supported Service Classes
 
@@ -378,9 +424,17 @@ Enterprise:
    - Enter the **Service Host** (e.g., `sqlprod.corp.local:1433`)
    - Enter the **Service Account** name (e.g., `svc_sql_backup`)
    - Enter the **Domain**
+   - Optionally enter an **Account Description** (leave blank for realistic default)
    - Enable **Create Service Account** if the account doesn't exist
    - Enable **Kerberos Auditing**
 5. Click **Deploy Ghost**
+
+### Removal Behavior
+
+When removing a Ghost SPN:
+- The SPN registration is removed from Active Directory
+- If "Create Service Account" was enabled, the service account is also deleted
+- If using an existing account, only the SPN is removed (account preserved)
 
 ### Command-Line Alternative
 

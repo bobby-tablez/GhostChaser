@@ -178,10 +178,24 @@ Ghost accounts are canary user accounts designed to detect credential theft and 
 5. Enter the **Username** for the Ghost account
 6. Choose between **Local Account** or **Domain Account**
    - For domain accounts, specify the domain and optional OU
-7. Click **Deploy Ghost**
+7. Optionally enter a custom **Description** (leave blank for realistic default)
+8. Select **Group Memberships** to make the account appear privileged:
+   - **Administrators** - Local admin group
+   - **Remote Desktop Users** - RDP access group
+   - **Backup Operators** - Backup privileges
+   - **Domain Admins** (domain accounts only) - High-value target
+   - **Enterprise Admins** (domain accounts only) - Highest privilege
+9. Click **Deploy Ghost**
+
+**Security Features:**
+- **Denied Logon Hours**: Domain accounts are created with zero allowed logon hours, preventing actual authentication even with correct credentials while still generating Event ID 4625 (failed logon)
+- **Strong Passwords**: Accounts are created with 32-character cryptographically random passwords
+- **Privileged Appearance**: Group memberships make accounts attractive targets for attackers
 
 **Best Practices:**
 - Use realistic but slightly suspicious usernames (e.g., `svc_backup`, `admin_temp`, `dbadmin`)
+- Add to privileged groups to make accounts more enticing to attackers
+- Use domain accounts for enhanced protection (logon hour restrictions)
 - Deploy to multiple systems for broader coverage
 - Document Ghost accounts to avoid confusion during incident response
 - Never use Ghost accounts for legitimate purposes
@@ -217,14 +231,31 @@ Ghost shares are honeypot network shares designed to detect lateral movement and
 4. Configure **Deployment Credentials**
 5. Enter a **Share Name** (visible on the network)
 6. Optionally specify a **Share Path** (defaults to local directory)
-7. Add a **Description** (makes the share more enticing)
-8. Enable **Share Auditing** if supported
-9. Click **Deploy Ghost**
+7. Add a **Description** (leave blank for realistic default like "Shared folder for departmental resources")
+8. Select **Bait Files** to include in the share:
+   - `passwords.txt` - Fake credentials document
+   - `credentials.xlsx` - Excel spreadsheet with apparent credentials
+   - `database_backup.sql` - SQL backup script with connection strings
+   - `vpn.config` - VPN configuration file
+   - `id_rsa` - SSH private key file
+   - `config.json` - JSON config with database/API credentials
+   - `deployment.bat` - Batch script with embedded credentials
+   - `admin_access.ps1` - PowerShell admin script
+   - `hr_ssn.docx` - HR document with apparent PII
+   - `CFO_Budget.pdf` - Executive financial document
+9. Enable **Share Auditing** if supported
+10. Click **Deploy Ghost**
+
+**Bait File Content:**
+Each bait file contains realistic but fake content designed to appear valuable:
+- Files are backdated 2-12 months to appear legitimate
+- Content includes fake server names, usernames, and redacted passwords
+- All sensitive values are marked as `[REDACTED]` or reference contacting IT
 
 **Best Practices:**
 - Use realistic share names (e.g., `Backups`, `Finance`, `HR_Documents`)
 - Add descriptive text to make shares appear legitimate
-- The tool automatically populates shares with bait files
+- Select bait files that match your organization's environment
 - Enable auditing to track access attempts
 
 ### Creating Ghost SPNs (Kerberoasting Detection)
@@ -260,9 +291,15 @@ Ghost SPNs are honey Service Principal Names designed to detect Kerberoasting at
 6. Enter the **Service Host** (e.g., `sqlserver.domain.com:1433`)
 7. Enter a **Service Account** name (e.g., `svc_sql_backup`)
 8. Specify the **Domain**
-9. Enable **Create Service Account** if the account doesn't exist
-10. Enable **Kerberos Auditing** for Event ID 4769 monitoring
-11. Click **Deploy Ghost**
+9. Optionally enter an **Account Description** (leave blank for realistic default)
+10. Enable **Create Service Account** if the account doesn't exist
+11. Enable **Kerberos Auditing** for Event ID 4769 monitoring
+12. Click **Deploy Ghost**
+
+**Security Features:**
+- **Denied Logon Hours**: Service accounts are created with zero allowed logon hours, preventing authentication while still triggering Event ID 4769 on TGS requests
+- **Strong Passwords**: 32-character cryptographically random passwords that won't crack offline
+- **Complete Removal**: When removing a Ghost SPN, both the SPN registration AND the service account are deleted (if created by GhostChaser)
 
 **Command-Line Alternative:**
 ```cmd
@@ -540,6 +577,23 @@ For issues, questions, or feature requests:
 - Consult Windows Event Logs for system-level errors
 
 ## Version History
+
+**v1.2.0** - Enhanced Security & Customization
+- **Logon Hours Denial**: Ghost Accounts and SPN service accounts now have zero allowed logon hours
+  - Prevents actual authentication even with correct credentials
+  - Still generates Event ID 4625 (failed logon) for accounts and 4769 (TGS) for SPNs
+- **Group Membership Options**: Make Ghost Accounts appear privileged
+  - Administrators, Remote Desktop Users, Backup Operators
+  - Domain Admins, Enterprise Admins (domain accounts only)
+- **Bait File Selection**: Choose which bait files to include in Ghost Shares
+  - 10 enticing file options (passwords.txt, credentials.xlsx, id_rsa, etc.)
+  - Each file has unique, realistic content
+  - Files are automatically backdated for authenticity
+- **Custom Descriptions**: All Ghost types support custom description fields
+  - Avoid telltale "canary" or "honey" text in AD/local users
+  - Realistic defaults if left blank
+- **Complete SPN Removal**: Removing Ghost SPNs now also deletes the service account (if created by GhostChaser)
+- **Fixed**: Ghost Share creation now properly creates network shares via WMI
 
 **v1.1.0** - Kerberoasting Detection
 - **NEW: Ghost SPN (Service Principal Name) creation** for detecting Kerberoasting attacks
